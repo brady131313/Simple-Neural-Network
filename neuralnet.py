@@ -4,7 +4,7 @@ class NeuralNet:
     def __init__(self, structure):
         self.structure = structure
         self.num_layers = len(structure)
-        self.params = self.init_layers()
+        self.params = {}
         self.cache = {}
         self.grads = {}
 
@@ -21,16 +21,20 @@ class NeuralNet:
 
         return params
 
-    def train(self, X, Y, num_iterations = 10000, print_cost = False):
+    def train(self, X, Y, num_iterations = 10000, learning_rate = 0.1, print_cost = False):
+        self.params = self.init_layers()
+        costs = []
         for i in range(num_iterations):
             A = self.forward_propagation(X)
             cost = compute_cost(A, Y, self.params)
+            costs.append(cost)
 
             self.backward_propagation(A, Y)
-            self.update_parameters()
+            self.update_parameters(learning_rate)
 
             if print_cost and i % 1000 == 0:
                 print(f"Cost after iteration {i}: {cost}")
+        return costs
 
     def predict(self, X):
         yHat = self.forward_propagation(X)

@@ -1,6 +1,8 @@
 from neuralnet import NeuralNet, compute_cost
+from visualize import plot_cost, learning_rate_test
 
 import numpy as np
+import matplotlib.pyplot as plt
 from sklearn.datasets import load_iris
 from sklearn.model_selection import train_test_split
 
@@ -26,23 +28,28 @@ def prepare_data(X, y):
 
     return (X_train, X_test, y_train, y_test)
 
+def compute_accuracy(net, X, y):
+    predictions = net.predict(X)
+    predictions = np.where(predictions > 0.5, 1, 0)
+
+    accuracy = (predictions == y).all(axis=0).mean()
+    return f"{(accuracy * 100):.2f}"
+
 def main():
     X, y = load_iris(True)
     X_train, X_test, y_train, y_test = prepare_data(X, y)
-    print(X_train.shape, y_train.shape)
 
     net = NeuralNet(structure)
-    net.train(X_train, y_train, print_cost=True)
+    #learning_rate_test(net, X_train, y_train, [0.5, 0.1, 0.05, 0.01])
 
-    predictions = net.predict(X_test)
-    predictions = np.where(predictions > 0.5, 1, 0)
+    learning_rate = 0.1
+    net = NeuralNet(structure)
+    costs = net.train(X_train, y_train, learning_rate=learning_rate, print_cost=True)
 
-    np.set_printoptions(linewidth=130)
-    
-    accuracy = (predictions == y_test).all(axis=0).mean()
-    print(accuracy)
-    print(y_test[:,5])
-    print(predictions[:,5])
+    accuracy = compute_accuracy(net, X_test, y_test)
+    print(f"\nModel Accuracy: {accuracy}%\n")
+
+    plot_cost(costs, learning_rate)
 
 if __name__ == '__main__':
     main()
