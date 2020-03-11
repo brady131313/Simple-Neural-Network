@@ -1,130 +1,145 @@
 import numpy as np
 
-class NeuralNet:
-    def __init__(self, structure):
-        self.structure = structure
-        self.num_layers = len(structure)
-        self.params = {}
-        self.cache = {}
-        self.grads = {}
 
-    def init_layers(self):
+class NeuralNet:
+    def __init__(self, layers, activations, cost):
+        self.layers = layers
+        self.activations = [()] + activations
+        self.num_layers = len(layers)
+        self.params = self._init_layers()
+        self.cost, self.cost_derivative = cost
+
+        assert(len(layers) == len(activations) + 1)
+
+    def _init_layers(self):
         params = {}
 
-        for index, layer in enumerate(self.structure):
-            layer_index = index + 1
-            input_size = layer['input_dim']
-            output_size = layer['output_dim']
-
-            params["W" + str(layer_index)] = np.random.randn(output_size, input_size) * 0.01
-            params["b" + str(layer_index)] = np.zeros((output_size, 1))
+        for l in range(1, self.num_layers):
+            params['W' + str(l)] = np.random.randn(self.layers[l],
+                                                   self.layers[l - 1]) * 0.01
+            params['b' + str(l)] = np.zeros((self.layers[l], 1))
 
         return params
 
-    def train(self, X, Y, num_iterations = 10000, learning_rate = 0.1, print_cost = False):
-        self.params = self.init_layers()
+    def _forward_linear(self, A, W, b):
+        Z = np.dot(W, A) + b
+        cache = (A, W, b)
+
+        return Z, cache
+
+    def _forward_activation(self, A_prev, W, b, activation):
+        Z, linear_cache = self._forward_linear(A_prev, W, b)
+        A, activation_cache = activation(Z)
+
+        cache = (linear_cache, activation_cache)
+        return A, cache
+
+    def forward_propagation(self, X):
+        caches = []
+        A = X
+
+        for l in range(1, self.num_layers):
+            A_prev = A
+
+            W = self.params['W' + str(l)]
+            b = self.params['b' + str(l)]
+            activation, _ = self.activations[l]
+
+            A, cache = self._forward_activation(A_prev, W, b, activation)
+            caches.append(cache)
+
+        return A, caches
+
+    def _backward_linear(self, dZ, cache):
+        A_prev, W, b = cache
+        m = A_prev.shape[1]
+
+        dW = (1 / m) * np.dot(dZ, A_prev.T)
+        db = (1 / m) * np.sum(dZ, axis=1, keepdims=True)
+        dA_prev = np.dot(W.T, dZ)
+
+        return dA_prev, dW, db
+
+    def _backward_activation(self, dA, cache, activation):
+        linear_cache, activation_cache = cache
+
+        dZ = activation(dA, activation_cache)
+        dA_prev, dW, db = self._backward_linear(dZ, linear_cache)
+
+        return dA_prev, dW, db
+
+    def backward_propagation(self, AL, Y, caches):
+        grads = {}
+        m = AL.shape[1]
+
+        dAL = self.cost_derivative(AL, Y)
+        grads['dA' + str(self.num_layers - 1)] = dAL
+
+        for l in reversed(range(self.num_layers - 1)):
+            layer = l + 1
+            cache = caches[l]
+            _, activation = self.activations[layer]
+            dA, dW, db = self._backward_activation(grads['dA' + str(layer)], cache, activation)
+
+            grads['dA' + str(l)] = dA
+            grads['dW' + str(layer)] = dW
+            grads['db' + str(layer)] = db
+
+        return grads
+
+    def _update_params(self, grads, learning_rate):
+        for l in range(self.num_layers - 1):
+            self.params['W' + str(l + 1)] = self.params['W' + str(l + 1)] - learning_rate * grads['dW' + str(l + 1)]
+            self.params['b' + str(l + 1)] = self.params['b' + str(l + 1)] - learning_rate * grads['db' + str(l + 1)]
+
+    def train(self, X, Y, num_iterations=10000, learning_rate=0.1, print_cost=False):
         costs = []
+
         for i in range(num_iterations):
-            A = self.forward_propagation(X)
-            cost = compute_cost(A, Y, self.params)
+            A, caches = self.forward_propagation(X)
+            cost = self.cost(A, Y)
             costs.append(cost)
 
-            self.backward_propagation(A, Y)
-            self.update_parameters(learning_rate)
+            grads = self.backward_propagation(A, Y, caches)
+            self._update_params(grads, learning_rate)
 
             if print_cost and i % 1000 == 0:
-                print(f"Cost after iteration {i}: {cost}")
+                print(f"Cost after iteration {i} = {cost}")
         return costs
 
     def predict(self, X):
-        yHat = self.forward_propagation(X)
-        return yHat
+        AL, _ = self.forward_propagation(X)
+        return AL
 
-    def forward_propagation(self, X):
-        A = X
-        self.cache["A0"] = X
+    def reset(self):
+        self.params = self._init_layers()
 
-        for index, layer in enumerate(self.structure):
-            layer_index = index + 1
-            activation = layer['activation']
 
-            A = self._forward_layer(A, layer_index, activation)
-        
-        return A
-
-    def _forward_layer(self, A, layer, activation = "relu"):
-        W = self.params["W" + str(layer)]
-        b = self.params["b" + str(layer)]
-
-        Z = np.dot(W, A) + b
-
-        if activation == "relu":
-            A = relu(Z)
-        elif activation == "sigmoid":
-            A = sigmoid(Z)
-
-        self.cache["Z" + str(layer)] = Z
-        self.cache["A" + str(layer)] = A
-
-        return A
-
-    def backward_propagation(self, yHat, Y):
+def meansquared():
+    def cost(AL, Y):
         m = Y.shape[1]
 
-        last_layer = self.num_layers
+        error = (1 / 2) * (np.linalg.norm(Y - AL, axis=0) ** 2)
+        cost = (1 / m) * np.sum(error)
+        return cost
 
-        dZ = (-2 * (Y - yHat)) * sigmoid_derivative(self.cache["Z" + str(last_layer)])
-        
-        for index_prev, layer in reversed(list(enumerate(self.structure))):
-            index_curr = index_prev + 1
-            activation = layer["activation"]
+    def derivative(AL, Y):
+        dAL = (-2 * (Y - AL))
+        return dAL
 
-            A_prev = self.cache["A" + str(index_prev)]
-
-            dW = (1 / m) * np.dot(dZ, A_prev.T)
-            db = (1 / m) * np.sum(dZ, axis=1, keepdims=True)
-
-            self.grads["dW" + str(index_curr)] = dW
-            self.grads["db" + str(index_curr)] = db
-
-            if index_prev == 0: break
-
-            W = self.params["W" + str(index_curr)]
-            Z = self.cache["Z" + str(index_prev)]
-            if activation == "relu":
-                dZ = np.dot(W.T, dZ) * relu_derivative(Z)
-            elif activation == "sigmoid":
-                dZ = np.dot(W.T, dZ) * sigmoid_derivative(Z)
-
-    def update_parameters(self, learning_rate = 0.1):
-        for index, layer in enumerate(self.structure):
-            layer_index = index + 1
-
-            W = self.params["W" + str(layer_index)]
-            b = self.params["b" + str(layer_index)]
-
-            dW = self.grads["dW" + str(layer_index)]
-            db = self.grads["db" + str(layer_index)]
-
-            self.params["W" + str(layer_index)] = W - learning_rate * dW
-            self.params["b" + str(layer_index)] = b - learning_rate * db
+    return cost, derivative
 
 
-def compute_cost(yHat, Y, parameters):
-    m = Y.shape[1]
-    error = (1 / 2) * (np.linalg.norm(Y - yHat, axis=0) ** 2)
-    cost = (1 / m) * np.sum(error)
+def crossentropy():
+    def cost(AL, Y):
+        m = Y.shape[1]
 
-    return cost
+        cost = (-1 / m) * np.sum((Y * np.log(AL) + ((1 - Y) * np.log(1 - AL))))
+        cost = np.squeeze(cost)
+        return cost
 
-def sigmoid(z):
-    return 1 / (1 + np.exp(-z))
+    def derivative(AL, Y):
+        dAL = - (np.divide(Y, AL) - np.divide(1 - Y, 1 - AL))
+        return dAL
 
-def sigmoid_derivative(z):
-    return np.exp(-z) / (np.power(1 + np.exp(-z), 2))
-
-def relu(z):
-    return np.maximum(0, z)
-
-def relu_derivative(z):
-    return 1. * (z > 0)
+    return cost, derivative
