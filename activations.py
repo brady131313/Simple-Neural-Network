@@ -10,7 +10,23 @@ def sigmoid():
         dZ = dA * sig * (1 - sig)
         return dZ
 
-    return (forward, backward)
+    return forward, backward
+
+def softmax():
+    def forward(Z):
+        A = np.exp(Z - np.max(Z, axis=0))
+        A = A / np.sum(A, axis=0)
+        return A, Z
+
+    def backward(dA, cache):
+        Z = cache
+        A = np.exp(Z - np.max(Z, axis=0))
+        A = A / np.sum(A, axis=0)
+
+        S = np.tile(A, S.shape[0])
+        return np.diag(A) - (S * S.T)
+
+    return forward, backward
 
 def tanh():
     def forward(Z):
@@ -23,7 +39,7 @@ def tanh():
         dZ = 1 - np.power(tanh, 2)
         return dZ
 
-    return (forward, backward)
+    return forward, backward
 
 def relu():
     def forward(Z):
@@ -35,4 +51,4 @@ def relu():
         dZ[cache <= 0] = 0
         return dZ
 
-    return (forward, backward)
+    return forward, backward

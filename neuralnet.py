@@ -134,7 +134,7 @@ def crossentropy():
     def cost(AL, Y):
         m = Y.shape[1]
 
-        cost = (-1 / m) * np.sum((Y * np.log(AL) + ((1 - Y) * np.log(1 - AL))))
+        cost = (-1 / m) * np.sum((Y * np.log(AL + 1e-15) + ((1 - Y) * np.log(1 - AL + 1e-15))))
         cost = np.squeeze(cost)
         return cost
 
